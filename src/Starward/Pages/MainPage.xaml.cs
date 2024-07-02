@@ -58,6 +58,9 @@ public sealed partial class MainPage : PageBase
     private readonly UpdateService _updateService = AppConfig.GetService<UpdateService>();
 
 
+    private readonly HoYoPlayService _hoyoPlayService = AppConfig.GetService<HoYoPlayService>();
+
+
     private readonly Compositor compositor;
 
 
@@ -67,7 +70,6 @@ public sealed partial class MainPage : PageBase
         compositor = ElementCompositionPreview.GetElementVisual(this).Compositor;
         InitializeGameBiz();
         RegisterMessage();
-        InitializeBackgroundImage();
         InitializeNavigationViewPaneDisplayMode();
     }
 
@@ -76,11 +78,19 @@ public sealed partial class MainPage : PageBase
     protected override void OnLoaded()
     {
         MainWindow.Current.KeyDown += MainPage_KeyDown;
+        InitializeBackgroundImage();
         _ = UpdateBackgroundImageAsync(true);
         _ = ShowRecentUpdateContentAsync();
         _ = CheckUpdateAsync();
+        _ = PrepareHoYoPlayDataAsync();
     }
 
+
+    private async Task PrepareHoYoPlayDataAsync()
+    {
+        await Task.Delay(3000);
+        await _hoyoPlayService.PrepareDataAsync();
+    }
 
 
     protected override void OnUnloaded()
@@ -189,7 +199,7 @@ public sealed partial class MainPage : PageBase
         }
         else
         {
-            NavigateTo(typeof(LauncherPage));
+            NavigateTo(typeof(GameLauncherPage));
         }
     }
 
@@ -200,7 +210,7 @@ public sealed partial class MainPage : PageBase
         _logger.LogInformation("Change game region to {gamebiz}", biz);
         CurrentGameBiz = biz;
         UpdateNavigationViewItemsText();
-        NavigateTo(MainPage_Frame.SourcePageType, gameBizChanged: true);
+        NavigateTo(MainPage_Frame.SourcePageType);
         _ = UpdateBackgroundImageAsync();
         AppConfig.CurrentGameBiz = biz;
     }
@@ -599,7 +609,7 @@ public sealed partial class MainPage : PageBase
                 }
                 var type = item.Tag switch
                 {
-                    nameof(LauncherPage) => typeof(LauncherPage),
+                    nameof(GameLauncherPage) => typeof(GameLauncherPage),
                     nameof(GameNoticesPage) => typeof(GameNoticesPage),
                     nameof(GameSettingPage) => typeof(GameSettingPage),
                     nameof(ScreenshotPage) => typeof(ScreenshotPage),
@@ -614,32 +624,23 @@ public sealed partial class MainPage : PageBase
     }
 
 
-    public void NavigateTo(Type? page, object? param = null, NavigationTransitionInfo? infoOverride = null, bool gameBizChanged = false)
+    public void NavigateTo(Type? page, object? param = null, NavigationTransitionInfo? infoOverride = null)
     {
-        //if (gameBizChanged)
-        //{
-        //    gameBizChanged = lastGameBiz.ToGame() != GameBiz.None && lastGameBiz.ToGame() != CurrentGameBiz.ToGame();
-        //}
-        string? sourcePage = MainPage_Frame.CurrentSourcePageType?.Name, destPage = page?.Name;
+        string? destPage = page?.Name;
         if (destPage is null or nameof(BlankPage)
-            || (CurrentGameBiz.ToGame() is GameBiz.Honkai3rd && destPage is nameof(GachaLogPage) or nameof(HoyolabToolboxPage) or nameof(SelfQueryPage))
-            || CurrentGameBiz.ToGame() is GameBiz.ZZZ && destPage is not nameof(LauncherPage) and not nameof(GameNoticesPage))
+            || (CurrentGameBiz.ToGame() is GameBiz.Honkai3rd && destPage is not nameof(GameLauncherPage) and not nameof(GameSettingPage) and not nameof(ScreenshotPage))
+            || CurrentGameBiz.ToGame() is GameBiz.ZZZ && destPage is not nameof(GameLauncherPage) and not nameof(GameNoticesPage))
         {
-            page = typeof(LauncherPage);
-            destPage = nameof(LauncherPage);
+            page = typeof(GameLauncherPage);
+            destPage = nameof(GameLauncherPage);
         }
-        //else if (!gameBizChanged && (destPage is nameof(GameNoticesPage) || (sourcePage is nameof(GameNoticesPage) && destPage is nameof(LauncherPage))))
-        //{
-        //    infoOverride = new SuppressNavigationTransitionInfo();
-        //}
-        if (destPage is nameof(LauncherPage))
+        if (destPage is nameof(GameLauncherPage))
         {
             MainPage_NavigationView.SelectedItem = NavigationViewItem_Launcher;
         }
         _logger.LogInformation("Navigate to {page} with param {param}", destPage, param ?? CurrentGameBiz);
-        //infoOverride ??= GetNavigationTransitionInfo(gameBizChanged);
         MainPage_Frame.Navigate(page, param ?? CurrentGameBiz, new DrillInNavigationTransitionInfo());
-        if (destPage is nameof(LauncherPage))
+        if (destPage is nameof(GameLauncherPage))
         {
             PlayVideo();
             Border_OverlayMask.Opacity = 0;
